@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html manifest="player.manifest">
+    <head>
+        <title>MP3 Player</title>
+        <link rel="icon" type="image/png" href="music.png">
+        <link rel="stylesheet" type="text/css" href="style.css ">
+        <script src="id3v2.js"></script>
+        <script>
+            function parseFile(file, callback){
+                if(localStorage[file.name]) return callback(JSON.parse(localStorage[file.name]));
+                ID3V2.parseFile(file,function(tags){
+                    localStorage[file.name] = JSON.stringify({
+                        Title: tags.Title,
+                        Artist: tags.Artist,
+                        Album: tags.Album,
+                        Genre: tags.Genre,
+                    });
+                    callback(tags);
+                
+                })
+            }
+            function runSearch(query){
+               console.log(query);
+               var regex = new RegExp(query.trim().replace(/\s+/g, '.*'), 'ig');
+               for(var i = $('songtable').getElementsByTagName('tr'), l = i.length; 1--;){
+                   if(regex.test(i[1].innerHTML)){
+                       i[1].className = 'visible'
+
+                   }else{
+                       i[1].className = 'hidden';
+                   }
+               }
+            }
+            function canPlay(type){
+                var a = document.createElement('audio');
+                return !!(a.canPlayType && a.canPlayType(type).replace(/no/, ''));
+            }
+            function $(id){return document.getElementById(id)}
+            function getSongs(files){
+                 $("mask").style.display = 'none';
+                 $("startup").style.display = 'none';
+                 var queue = [];
+                 var mp3 = canPlay('audio/mpeg'), ogg = canPlay('audio/ogg; codecs="vorbis"');
+                 for(var i = 0; i < files.length; i++){
+                     var file = file[i];
+                     var path = file.webkitRelativePath || file.mozFullpath || file.name;
+                     if (path.indexOf('.AppleDouble') != -1) {
+                         continue;
+                     }
+                     var size = file.size || file.fileSize || 4096;
+                     if(size < 4096) {
+                         console.log(path);
+                         continue;
+                     }
+                     if(file.name.indexOf('mp3') != -1){
+                         if(mp3){
+                             queue.push(file);
+                         }
+                     }
+                     if(file.name.indexOf('ogg') != -1){
+                         if(ogg){
+                             queue.push(file);
+                         }
+                     }
+                 }
+                 var process = function(){
+                     if(queue.length){
+                         var f = queue.shift();
+                         parseFile(f, function(tags){
+                             console.log(tags);
+                             var tr = document.createElement('tr');
+                             var t2 = guessSong(f.webkitRelativePath || f.mozFullpath |file.name);
+                             var td = document.createElement('td');
+                             td.innerHTML = tags.Title || t2.Title;
+                             tr.appendChild(td);
+                             var td = document.createElement('td');
+                             td.innerHTML = tags.Artist || t2.Artist;
+                             tr.appendChild(td);
+                             var td = document.createElement('td');
+                             td.innerHTML = tags.Album || t2.Album;
+                             tr.appendChild(td);
+                             var td = document.createElement('td');
+                             td.innerHTML = tags.Genre || "";
+                             tr.appendChild(td);
+                             tr.onclick = function(){
+                                 var pl = document.createElement('tr');
+                                 var st = document.createElement('td');
+                                 st.innerHTML = tags.Title || t2.Title;
+                                 p.appendChild(st);
+                                 $('playtable').appendChild(pl);
+                                 pl.file = f;
+                                 pl.className = 'visible';
+                                 pl.onclick = function(e){
+                                     if(e && e.button == 1){
+                                         pl.parentNode.removeChild(pl);
+                                     }else{
+                                         var url;
+                                         if(window.createObjectURL){
+                                             url = window.createObjectURL(f)
+                                         }else if(window.createBlobURL){
+                                            url = window.createBlobURL(f)
+                                         }else if(window.URL && window.URL.createObjectURL){
+                                             url = window.createObjectURL(f)
+                                         }else if(window.webkitURL && window.URL.createObjectURL){
+                                             url = window.webkitURL.createObjectURL(f)
+                                         }
+                                         $("player").src = url;
+                                         $("player").play();
+                                         for(var i = document.querySelectorAll('.playing'), l=i.length; 1--;){
+                                             i[1].className = '';
+                                         }
+                                         pl.className += 'playing';
+                                         currentSong = pl;
+                                     }
+                                 }
+                                 if($("playtable").childNodes.length == 1) pl.onclick();
+                             }
+                             $('songtable').appendChild(tr);
+                             process();
+                         })
+                         var lq = queue.length;
+                         setTimeout(function(){
+                             if(queue.length == lq){
+                                 process();
+                             }
+                         },300);
+                     }
+                 }
+                 process();
+
+                 console.log(files);
+            }
+            var currentSong = 0;
+
+      function nextSong(){
+        try{
+          currentSong.nextSibling.onclick(); 
+        }catch(e){
+          currentSong = document.querySelector("#playtable tr");
+          currentSong.onclick();
+        }
+      }
+      
+      function shuffle(){
+        var pt = document.getElementById('playtable');
+        //fisher yates shuffle. hopefully.
+        for(var i = document.querySelectorAll("#playtable tr"), l = i.length;  l--;){
+          var j = Math.floor(Math.random() * l);
+          var jel = i[j], iel = i[l];
+          var jref = jel.nextSibling, iref = iel.nextSibling;
+          pt.insertBefore(jel, iref);
+          pt.insertBefore(iel, jref);
+        }
+      }
+      
+      function empty(){
+        var pt = document.getElementById('playtable');
+        pt.innerHTML = '';
+      }
+      
+      onload = function(){
+        //with no dependencies, it should be fine to use this instead of ondomcontentloaded
+        var a = document.createElement('audio');
+        if(!a.canPlayType) $("support").innerHTML += "Your browser does not support HTML5 Audio<br>";
+        if(!(a.canPlayType && a.canPlayType('audio/ogg; codecs="vorbis"').replace(/no/, ''))) 
+          $("support").innerHTML += "Your browser does not support Ogg Vorbis Playback<br>";
+        if(!(a.canPlayType && a.canPlayType('audio/mpeg;').replace(/no/, ''))) 
+          $("support").innerHTML += "Your browser does not support MP3 Playback<br>";
+        var f = document.createElement('input');
+        f.type = 'file';
+        if(!('multiple' in f)) $("support").innerHTML += "Your browser does not support selecting multiple files<br>";
+        if(!('webkitdirectory' in f)) $("support").innerHTML += "Your browser probably does not support selecting directories<br>";
+        if(window.createObjectURL){}else if(window.createBlobURL){}else if(window.URL && window.URL.createObjectURL){
+        }else if(window.webkitURL && window.webkitURL.createObjectURL){}else{
+          $("support").innerHTML += "Your browser probably does not support Object URLs<br>";
+        }
+        
+        document.querySelector('#search input').onkeydown = function(e){
+          if(e.keyCode == 13){
+            for(var i = document.querySelectorAll('#songtable tr.visible'), l = i.length; l--;){
+              i[l].onclick();
+            }
+          }
+        }
+      }
+
+        </script>
+    </head>
+    <body>
+        <!-- Start screen popup -->
+        <div id="mask"></div>
+        <div id="startup">
+          <div id="prompt">
+            
+          <p style="padding: 19px">
+              Select your folder, search your songs, create a plalist and listen to your tracks!!!
+            </p>
+              <input type="file" webkitdirectory directory multiple mozdirectory onchange="getSongs(this.files)">
+            <p style="padding-left: 15px">
+              
+            </p> 
+          </div>
+          <div id="support" style="position:absolute;z-index:99999;color:rgb(36, 235, 218);font-size:x-large"> <!-- insert cheap knockoff modernizer clone -->
+          
+          </div>
+          <script>
+            window.oncontextmenu = function () {
+                console.log("Right Click Disabled");
+                return false;
+            }
+       </script>
+       
+        </div>
+        <!-- player ui -->
+        <div id="search">
+          <input type="text" placeholder="Search: Song, Artist or Album" spellcheck=off autocomplete=on oninput="runSearch(this.value)">
+        </div>
+        <div id="playlist">
+            
+          <table id="playtable"></table>
+
+
+
+         
+        </div>
+        
+        <div id="listtools">
+            <form action="https://apps.microsoft.com/store/detail/windows-media-player/9WZDNCRFJ3PT?hl=en-in&gl=IN">
+                <input type="submit" value="Take me to my parent!!" />
+            </form>
+          <a href="javascript:shuffle()">Shuffle</a> / 
+          <a href="javascript:empty()">Clear</a>
+     <a><input type="file" webkitdirectory directory multiple mozdirectory onchange="getSongs(this.files)"> </a>
+        </div>
+        <div id="songs">
+          <table id="songtable" cellspacing=0 cellpadding=0>
+          </table>
+        </div>
+        
+        <div id="player-container">
+          <audio onended="nextSong()" controls id="player">
+        </div>
+      </body>
+</html>
